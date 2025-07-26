@@ -11,17 +11,17 @@ namespace aZero
     {
     public:
         /// <summary>
-        /// Contains the offset and size of an allocation.
+        /// Information about an allocation.
         /// </summary>
         struct Allocation
         {
             /// <summary>
-            /// Allocation offset into the linear allocator.
+            /// Offset into the memory pool in bytes.
             /// </summary>
             size_t Offset;
 
             /// <summary>
-            /// Size of the allocation in bytes.
+            /// Size in bytes.
             /// </summary>
             size_t Size;
         };
@@ -29,55 +29,76 @@ namespace aZero
         LinearAllocator() = default;
 
         /// <summary>
-        /// Initializes with the input pointer and size variables.
+        /// Initializes with the input memory pool and sets the current max size.
         /// </summary>
-        /// <param name="ptr">A pointer to the memory pool.</param>
-        /// <param name="size">Size of the memory pool.</param>
-        LinearAllocator(void* ptr, size_t size)
+        /// <param name="memoryPool">A pointer to the memory pool.</param>
+        /// <param name="size">Max size of the allocator.</param>
+        LinearAllocator(void* memoryPool, size_t size)
         {
-            this->Init(ptr, size);
+            this->Init(memoryPool, size);
         }
 
         /// <summary>
-        /// Initializes with the input pointer and size variables.
+        /// Initializes with the input memory pool and sets the current max size.
         /// </summary>
-        /// <param name="ptr">A pointer to the memory pool</param>
-        /// <param name="size">Size of the memory pool</param>
-        void Init(void* ptr, size_t size)
+        /// <param name="memoryPool">A pointer to the memory pool.</param>
+        /// <param name="size">Max size of the allocator.</param>
+        void Init(void* memoryPool, size_t size)
         {
-            m_Ptr = ptr;
+            m_MemoryPool = memoryPool;
             m_Size = size;
             m_Offset = 0;
         }
 
         /// <summary>
-        /// Copies the data into the memory pool.
-        /// Returns the offset into the memory pool where the data was copied.
+        /// Allocates a portion of the memory pool and returns a handle for it.
         /// </summary>
-        /// <param name="data">A pointer to the data to copy.</param>
-        /// <param name="size">Size of the data to copy. Might be undefined behaviour if it's larger than the data that the pointer is referencing.</param>
-        /// <returns>Offset into the memory pool where the data was copied.</returns>
-        
-        /// <summary>
-        /// Copies the data into the memory pool.
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data">Const reference to the data that will be copied.</param>
-        /// <param name="size">Size of the data in bytes.</param>
-        /// <returns>An object that contains information about the completed allocation.</returns>
-        template<typename T>
-        Allocation Alloc(const T& data, size_t size)
+        /// <param name="size">Allocation size.</param>
+        /// <returns>A handle describing the allocation.</returns>
+        Allocation Allocate(size_t size)
         {
-            const size_t sizeAfterCopy = m_Offset + size;
-            if (sizeAfterCopy > m_Size)
+            if (m_Offset + size > m_Size)
             {
-                throw std::out_of_range("Buffer is full");
+                throw std::out_of_range("Memorypool is full");
             }
 
-            const size_t allocOffset = m_Offset;
-            m_Offset = sizeAfterCopy;
-            memcpy((char8_t*)m_Ptr + allocOffset, (void*)&data, size);
-            return { .Offset = allocOffset, .Size = size };
+            const size_t allocationOffset = m_Offset;
+            m_Offset += size;
+            return { .Offset = allocationOffset, .Size = size };
+        }
+
+        /// <summary>
+        /// Writes data to the part of the memory pool that the Allocation handle describes.
+        /// NOTE: The size described in the Allocation handle shouldn't exceed the size of the data.
+        /// </summary>
+        /// <param name="allocation">Describes where the data should be written inside the memory pool.</param>
+        /// <param name="data">Address of the data that should be written.</param>
+        void Write(const Allocation& allocation, void* data)
+        {
+            memcpy((std::byte*)m_MemoryPool + allocation.Offset, data, allocation.Size);
+        }
+
+        /// <summary>
+        /// Allocates a portion of the memory pool, writes the data to it, and returns a handle for it.
+        /// </summary>
+        /// <param name="data">Address of the data that should be allocated and written.</param>
+        /// <param name="size">Allocation size.</param>
+        /// <returns></returns>
+        Allocation Append(void* data, size_t size)
+        {
+            const Allocation allocation = this->Allocate(size);
+            this->Write(allocation, data);
+            return allocation;
+        }
+
+        /// <summary>
+        /// Gets a pointer to the data referenced by the Allocation handle.
+        /// </summary>
+        /// <param name="allocation">Allocation handle defining the data offset into the memory pool.</param>
+        /// <returns>Address to the allocation.</returns>
+        void* Get(const Allocation& allocation)
+        {
+            return (std::byte*)m_MemoryPool + allocation.Offset;
         }
 
         /// <summary>
@@ -104,7 +125,7 @@ namespace aZero
         /// <summary>
         /// Pointer to the memory pool.
         /// </summary>
-        void* m_Ptr = nullptr;
+        void* m_MemoryPool = nullptr;
 
         /// <summary>
         /// Current offset into the memory pool.
@@ -112,7 +133,7 @@ namespace aZero
         size_t m_Offset;
 
         /// <summary>
-        /// Max size of the memory pool. Should never exceed the memoryreferenced by m_Ptr.
+        /// Max size of the memory pool. Should never exceed the memoryreferenced by m_MemoryPool.
         /// </summary>
         size_t m_Size;
     };

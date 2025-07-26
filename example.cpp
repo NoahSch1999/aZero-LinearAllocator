@@ -5,25 +5,31 @@ int main()
 {
 	// Allocate memory pool
 	constexpr uint32_t memoryPoolSizeBytes = 1337;
-	void* const memoryPool = new char8_t[memoryPoolSizeBytes];
+	void* const memoryPool = new std::byte[memoryPoolSizeBytes];
 
 	// Create linear allocator on the underlying memory pool
 	LinearAllocator allocator(memoryPool, memoryPoolSizeBytes);
 
-	// Copying a std::string into the linear allocator
-	const std::string str("Hello");
-	LinearAllocator::Allocation alloc1 = allocator.Alloc(str, str.size());
+	int someInt = 42;
+	double someDouble = 1337.0;
 
-	// Copying an int into the linear allocator
-	const uint32_t someInt = 42;
-	LinearAllocator::Allocation alloc2 = allocator.Alloc(someInt, sizeof(someInt));
+	// Allocates for an int
+	auto alloc1 = allocator.Allocate(sizeof(someInt));
 
-	// Copying an int from the underlying memory pool using the information returned on allocation
-	uint32_t fetchedInt;
-	memcpy((void*)&fetchedInt, (char8_t*)memoryPool + alloc2.Offset, alloc2.Size);
+	// Writes using the allocation
+	allocator.Write(alloc1, &someInt);
+
+	// Allocates and writes a double
+	auto alloc2 = allocator.Append(&someDouble, sizeof(someDouble));
+
+	// Get the data from the memory pool using the allocations
+	double fetchedDouble = *(double*)allocator.Get(alloc2);
+	int fetchedInt = *(int*)allocator.Get(alloc1);
 
 	// Prints "42"
 	std::cout << fetchedInt << "\n";
+	// Prints "1337"
+	std::cout << fetchedDouble << "\n";
 
 	return 0;
 }
