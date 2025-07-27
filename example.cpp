@@ -9,6 +9,7 @@ int main()
 
 	// Create linear allocator on the underlying memory pool
 	LinearAllocator allocator(memoryPool, memoryPoolSizeBytes);
+	// LinearAllocator<8> allocator(memoryPool, memoryPoolSizeBytes); // Ex. of 8-byte alignment
 
 	int someInt = 42;
 	double someDouble = 1337.0;
