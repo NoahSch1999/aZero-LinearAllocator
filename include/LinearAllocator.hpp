@@ -4,12 +4,15 @@
 namespace aZero
 {
     /// <summary>
-    /// A thin wrapper-class that enables linear/bump allocation on an underlying memory pool.
+    /// A thin wrapper-class that enables memory-aligned linear allocations on an underlying memory pool.
     /// All offsets and sizes are defined in bytes.
     /// </summary>
+    /// <typeparam name="AlignmentBytes">How many bytes allocations should be aligned with.</typeparam>
+    template<size_t AlignmentBytes = sizeof(int32_t)>
     class LinearAllocator
     {
     public:
+
         /// <summary>
         /// Information about an allocation.
         /// </summary>
@@ -57,14 +60,16 @@ namespace aZero
         /// <returns>A handle describing the allocation.</returns>
         Allocation Allocate(size_t size)
         {
-            if (m_Offset + size > m_Size)
+            void* offsetPtr = (std::byte*)m_MemoryPool + m_Offset;
+            size_t spaceLeft = m_Size - m_Offset;
+            if (!std::align(m_AlignmentBytes, size, offsetPtr, spaceLeft))
             {
                 throw std::out_of_range("Memorypool is full");
             }
 
-            const size_t allocationOffset = m_Offset;
-            m_Offset += size;
-            return { .Offset = allocationOffset, .Size = size };
+            const size_t allocOffset = (std::byte*)offsetPtr - (std::byte*)m_MemoryPool;
+            m_Offset = allocOffset + size;
+            return { .Offset = allocOffset, .Size = size };
         }
 
         /// <summary>
@@ -122,6 +127,11 @@ namespace aZero
         size_t Size() const { return m_Size; }
 
     private:
+        /// <summary>
+        /// How many bytes allocations should be aligned with.
+        /// </summary>
+        const size_t m_AlignmentBytes = AlignmentBytes;
+
         /// <summary>
         /// Pointer to the memory pool.
         /// </summary>
