@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstdint>
 #include <stdexcept>
 
@@ -12,7 +14,6 @@ namespace aZero
     class LinearAllocator
     {
     public:
-
         /// <summary>
         /// Information about an allocation.
         /// </summary>
@@ -40,6 +41,11 @@ namespace aZero
         {
             this->Init(memoryPool, size);
         }
+
+        LinearAllocator(const LinearAllocator&) = delete;
+        LinearAllocator& operator=(const LinearAllocator&) = delete;
+        LinearAllocator(LinearAllocator&&) = delete;
+        LinearAllocator& operator=(LinearAllocator&&) = delete;
 
         /// <summary>
         /// Initializes with the input memory pool and sets the current max size.
@@ -130,7 +136,7 @@ namespace aZero
         /// <summary>
         /// How many bytes allocations should be aligned with.
         /// </summary>
-        const size_t m_AlignmentBytes = AlignmentBytes;
+        size_t m_AlignmentBytes = AlignmentBytes;
 
         /// <summary>
         /// Pointer to the memory pool.
