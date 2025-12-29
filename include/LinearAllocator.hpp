@@ -6,8 +6,8 @@
 namespace aZero
 {
     /**
-     * @brief A wrapper that allows linear suballocations into the designated memory pool.
-     * @tparam AlignmentType The type to align for.
+     * @brief A wrapper that allows linear suballocations into a designated memory pool. All allocations have to be for classes that are trivially copiable.
+     * @tparam AlignmentType The desired type to align for. Defaulted to int32_t (4 bytes).
      */
     template<typename AlignmentType = int32_t>
     class LinearAllocator
@@ -19,7 +19,7 @@ namespace aZero
         static constexpr size_t Alignment = sizeof(AlignmentType);
 
         /**
-         * @brief A handle to an allocation. Can be used to write or read to the allocated memory.
+         * @brief A handle to an allocation. Can be used to write and read to the allocated memory.
          * @tparam T The type of the class that was allocated for.
          */
         template<typename T>
@@ -34,7 +34,7 @@ namespace aZero
             Handle() = default;
 
             /**
-              * @brief Copies the data to the allocated address.
+              * @brief Copies data to the allocated address.
               * @param data The data to copy.
               */
             void Write(const T& data) const { memcpy(m_OffsetPtr, &data, sizeof(T)); }
@@ -48,7 +48,7 @@ namespace aZero
 
         /**
          * @brief Main constructor for initialization.
-         * @param memoryPool A pointer to an allocated memory pool that will be suballocated into.
+         * @param memoryPool A pointer to an allocated memory pool that will be suballocated into by the allocator.
          * @param capacity The capacity (in bytes) of the allocated memory pool that the pointer references. NOTE: Can lead to UB if it's larger than the actual allocated memory pool.
          */
         explicit LinearAllocator(std::byte* memoryPool, size_t capacity)
@@ -73,7 +73,7 @@ namespace aZero
         }
 
         /**
-         * @brief Returns a handle for an allocation for the specified template parameter.
+         * @brief Returns a handle to the allocation with the size of the template parameter class. NOTE: All allocations have to be for classes that are trivially copyable.
          * @tparam T The class to allocate for.
          * @return A handle to the allocation.
          */
@@ -125,6 +125,12 @@ namespace aZero
          * @return Offset in bytes.
          */
         [[nodiscard]] size_t GetOffset() const { return static_cast<size_t>(m_OffsetPtr - m_MemoryPool); }
+
+        /**
+         * @brief Returns whether or not the allocator references any memory.
+         * @return TRUE if it references any memory.
+         */
+        bool IsValid() const { return (m_MemoryPool != nullptr && m_Capacity > 0); }
 
     private:
         std::byte* m_MemoryPool = nullptr;
