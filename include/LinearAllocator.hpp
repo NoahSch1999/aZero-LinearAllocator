@@ -1,156 +1,99 @@
 #pragma once
-
 #include <cstdint>
 #include <stdexcept>
+#include <type_traits>
 
 namespace aZero
 {
-    /// <summary>
-    /// A thin wrapper-class that enables memory-aligned linear allocations on an underlying memory pool.
-    /// All offsets and sizes are defined in bytes.
-    /// </summary>
-    /// <typeparam name="AlignmentBytes">How many bytes allocations should be aligned with.</typeparam>
-    template<size_t AlignmentBytes = sizeof(int32_t)>
+    template<size_t AlignmentType = sizeof(int32_t)>
     class LinearAllocator
     {
     public:
-        /// <summary>
-        /// Information about an allocation.
-        /// </summary>
-        struct Allocation
-        {
-            /// <summary>
-            /// Offset into the memory pool in bytes.
-            /// </summary>
-            size_t Offset;
+        static constexpr size_t Alignment = AlignmentType;
 
-            /// <summary>
-            /// Size in bytes.
-            /// </summary>
-            size_t Size;
+        template<typename T>
+        class Handle
+        {
+            friend LinearAllocator;
+            std::byte* m_OffsetPtr = nullptr;
+
+            Handle(std::byte* offsetPtr)
+                :m_OffsetPtr(offsetPtr) { }
+        public:
+            Handle() = default;
+            void Write(const T& data) const { memcpy(m_OffsetPtr, &data, sizeof(T)); }
+            T* operator->() { return reinterpret_cast<T*>(m_OffsetPtr); }
+            T& operator*() { return *reinterpret_cast<T*>(m_OffsetPtr); }
+            T& operator*() const { return *reinterpret_cast<T*>(m_OffsetPtr); }
         };
 
         LinearAllocator() = default;
 
-        /// <summary>
-        /// Initializes with the input memory pool and sets the current max size.
-        /// </summary>
-        /// <param name="memoryPool">A pointer to the memory pool.</param>
-        /// <param name="size">Max size of the allocator.</param>
-        LinearAllocator(void* memoryPool, size_t size)
+        explicit LinearAllocator(std::byte* memoryPool, size_t capacity)
+            :m_MemoryPool(memoryPool), m_OffsetPtr(memoryPool), m_Capacity(capacity) { }
+
+        LinearAllocator(LinearAllocator&) = delete;
+        LinearAllocator& operator=(LinearAllocator&) = delete;
+
+        LinearAllocator(LinearAllocator&& other) noexcept
         {
-            this->Init(memoryPool, size);
+            this->Move(other);
         }
 
-        LinearAllocator(const LinearAllocator&) = delete;
-        LinearAllocator& operator=(const LinearAllocator&) = delete;
-        LinearAllocator(LinearAllocator&&) = delete;
-        LinearAllocator& operator=(LinearAllocator&&) = delete;
-
-        /// <summary>
-        /// Initializes with the input memory pool and sets the current max size.
-        /// </summary>
-        /// <param name="memoryPool">A pointer to the memory pool.</param>
-        /// <param name="size">Max size of the allocator.</param>
-        void Init(void* memoryPool, size_t size)
+        LinearAllocator& operator=(LinearAllocator&& other) noexcept
         {
-            m_MemoryPool = memoryPool;
-            m_Size = size;
-            m_Offset = 0;
+            if (*this != other)
+            {
+                this->Move(other);
+            }
+
+            return *this;
         }
 
-        /// <summary>
-        /// Allocates a portion of the memory pool and returns a handle for it.
-        /// </summary>
-        /// <param name="size">Allocation size.</param>
-        /// <returns>A handle describing the allocation.</returns>
-        Allocation Allocate(size_t size)
+        template<typename T>
+        [[nodiscard]] Handle<T> Allocate()
         {
-            void* offsetPtr = (std::byte*)m_MemoryPool + m_Offset;
-            size_t spaceLeft = m_Size - m_Offset;
-            if (!std::align(m_AlignmentBytes, size, offsetPtr, spaceLeft))
+            static_assert(std::is_trivially_copyable_v<T>);
+
+            size_t freeBytes = m_Capacity - static_cast<size_t>(m_OffsetPtr - m_MemoryPool);
+            void* voidOffsetPtr = static_cast<void*>(m_OffsetPtr);
+            std::byte* const alignedPtr = reinterpret_cast<std::byte*>(std::align(Alignment, sizeof(T), voidOffsetPtr, freeBytes));
+
+            if (!alignedPtr)
             {
                 throw std::out_of_range("Memorypool is full");
             }
 
-            const size_t allocOffset = (std::byte*)offsetPtr - (std::byte*)m_MemoryPool;
-            m_Offset = allocOffset + size;
-            return { .Offset = allocOffset, .Size = size };
+            m_OffsetPtr = alignedPtr + sizeof(T);
+            return Handle<T>(alignedPtr);
         }
 
-        /// <summary>
-        /// Writes data to the part of the memory pool that the Allocation handle describes.
-        /// NOTE: The size described in the Allocation handle shouldn't exceed the size of the data.
-        /// </summary>
-        /// <param name="allocation">Describes where the data should be written inside the memory pool.</param>
-        /// <param name="data">Address of the data that should be written.</param>
-        void Write(const Allocation& allocation, void* data)
+        template<typename T>
+        [[nodiscard]] Handle<T> Append(const T& data)
         {
-            memcpy((std::byte*)m_MemoryPool + allocation.Offset, data, allocation.Size);
+            const Handle<T> handle = this->Allocate<T>();
+            handle.Write(data);
+            return handle;
         }
 
-        /// <summary>
-        /// Allocates a portion of the memory pool, writes the data to it, and returns a handle for it.
-        /// </summary>
-        /// <param name="data">Address of the data that should be allocated and written.</param>
-        /// <param name="size">Allocation size.</param>
-        /// <returns></returns>
-        Allocation Append(void* data, size_t size)
-        {
-            const Allocation allocation = this->Allocate(size);
-            this->Write(allocation, data);
-            return allocation;
-        }
-
-        /// <summary>
-        /// Gets a pointer to the data referenced by the Allocation handle.
-        /// </summary>
-        /// <param name="allocation">Allocation handle defining the data offset into the memory pool.</param>
-        /// <returns>Address to the allocation.</returns>
-        void* Get(const Allocation& allocation)
-        {
-            return (std::byte*)m_MemoryPool + allocation.Offset;
-        }
-
-        /// <summary>
-        /// Resets the allocator to the beginning again.
-        /// </summary>
-        void Reset()
-        {
-            m_Offset = 0;
-        }
-
-        /// <summary>
-        /// Gets the current offset into the memory pool.
-        /// </summary>
-        /// <returns>Current offset into the memory pool.</returns>
-        size_t Offset() const { return m_Offset; }
-
-        /// <summary>
-        /// Gets the max size of the memory pool.
-        /// </summary>
-        /// <returns>Max size of the memory pool</returns>
-        size_t Size() const { return m_Size; }
+        void Rewind() { m_OffsetPtr = m_MemoryPool; }
+        [[nodiscard]] size_t GetCapacity() const { return m_Capacity; }
+        [[nodiscard]] size_t GetOffset() const { return static_cast<size_t>(m_OffsetPtr - m_MemoryPool); }
 
     private:
-        /// <summary>
-        /// How many bytes allocations should be aligned with.
-        /// </summary>
-        size_t m_AlignmentBytes = AlignmentBytes;
+        std::byte* m_MemoryPool = nullptr;
+        std::byte* m_OffsetPtr = nullptr;
+        size_t m_Capacity = 0;
 
-        /// <summary>
-        /// Pointer to the memory pool.
-        /// </summary>
-        void* m_MemoryPool = nullptr;
+        void Move(LinearAllocator& other)
+        {
+            m_MemoryPool = other.m_MemoryPool;
+            m_OffsetPtr = other.m_OffsetPtr;
+            m_Capacity = other.m_Capacity;
 
-        /// <summary>
-        /// Current offset into the memory pool.
-        /// </summary>
-        size_t m_Offset;
-
-        /// <summary>
-        /// Max size of the memory pool. Should never exceed the memoryreferenced by m_MemoryPool.
-        /// </summary>
-        size_t m_Size;
+            other.m_MemoryPool = nullptr;
+            other.m_OffsetPtr = nullptr;
+            other.m_Capacity = 0;
+        }
     };
 }
