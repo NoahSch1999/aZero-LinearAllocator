@@ -5,12 +5,23 @@
 
 namespace aZero
 {
-    template<size_t AlignmentType = sizeof(int32_t)>
+    /**
+     * @brief A wrapper that allows linear suballocations into the designated memory pool.
+     * @tparam AlignmentType The type to align for.
+     */
+    template<typename AlignmentType = int32_t>
     class LinearAllocator
     {
     public:
-        static constexpr size_t Alignment = AlignmentType;
+        /**
+         * @brief The desired alignment in bytes
+         */
+        static constexpr size_t Alignment = sizeof(AlignmentType);
 
+        /**
+         * @brief A handle to an allocation. Can be used to write or read to the allocated memory.
+         * @tparam T The type of the class that was allocated for.
+         */
         template<typename T>
         class Handle
         {
@@ -21,7 +32,13 @@ namespace aZero
                 :m_OffsetPtr(offsetPtr) { }
         public:
             Handle() = default;
+
+            /**
+              * @brief Copies the data to the allocated address.
+              * @param data The data to copy.
+              */
             void Write(const T& data) const { memcpy(m_OffsetPtr, &data, sizeof(T)); }
+
             T* operator->() { return reinterpret_cast<T*>(m_OffsetPtr); }
             T& operator*() { return *reinterpret_cast<T*>(m_OffsetPtr); }
             T& operator*() const { return *reinterpret_cast<T*>(m_OffsetPtr); }
@@ -29,6 +46,11 @@ namespace aZero
 
         LinearAllocator() = default;
 
+        /**
+         * @brief Main constructor for initialization.
+         * @param memoryPool A pointer to an allocated memory pool that will be suballocated into.
+         * @param capacity The capacity (in bytes) of the allocated memory pool that the pointer references. NOTE: Can lead to UB if it's larger than the actual allocated memory pool.
+         */
         explicit LinearAllocator(std::byte* memoryPool, size_t capacity)
             :m_MemoryPool(memoryPool), m_OffsetPtr(memoryPool), m_Capacity(capacity) { }
 
@@ -50,6 +72,11 @@ namespace aZero
             return *this;
         }
 
+        /**
+         * @brief Returns a handle for an allocation for the specified template parameter.
+         * @tparam T The class to allocate for.
+         * @return A handle to the allocation.
+         */
         template<typename T>
         [[nodiscard]] Handle<T> Allocate()
         {
@@ -68,6 +95,12 @@ namespace aZero
             return Handle<T>(alignedPtr);
         }
 
+        /**
+         * @brief Allocates and copies the input data to the memory pool and returns a handle to the allocation.
+         * @tparam T The type of the data to copy.
+         * @param data The data to copy.
+         * @return A handle to the allocation.
+         */
         template<typename T>
         [[nodiscard]] Handle<T> Append(const T& data)
         {
@@ -76,8 +109,21 @@ namespace aZero
             return handle;
         }
 
+        /**
+         * @brief Resets the offset to the beginning of the memory pool.
+         */
         void Rewind() { m_OffsetPtr = m_MemoryPool; }
+
+        /**
+         * @brief Returns the max capacity of the allocator in bytes.
+         * @return Max number of bytes that can be allocated.
+         */
         [[nodiscard]] size_t GetCapacity() const { return m_Capacity; }
+
+        /**
+         * @brief Returns the current offset in bytes into the allocator.
+         * @return Offset in bytes.
+         */
         [[nodiscard]] size_t GetOffset() const { return static_cast<size_t>(m_OffsetPtr - m_MemoryPool); }
 
     private:
