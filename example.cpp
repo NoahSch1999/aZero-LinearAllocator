@@ -16,7 +16,6 @@ struct MyClass
 
 int main()
 {
-	int x = sizeof(MyClass);
 	// Allocate memory pool and create a LinearAllocator referencing it
 	std::vector<std::byte> pool(20);
 	aZero::LinearAllocator<> allocator(pool.data(), pool.size());
