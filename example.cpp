@@ -1,18 +1,22 @@
 #include <iostream>
 #include <vector>
-#include "../LinearAllocator.hpp"
+#include "include/LinearAllocator.hpp"
 
+#pragma pack(push, 1)
 struct MyClass
 {
-	int x;
+	char y;
+	int16_t x;
 	void Foo()
 	{
 		printf("Hello world!\n");
 	}
 };
+#pragma pack(pop)
 
 int main()
 {
+	int x = sizeof(MyClass);
 	// Allocate memory pool and create a LinearAllocator referencing it
 	std::vector<std::byte> pool(20);
 	aZero::LinearAllocator<> allocator(pool.data(), pool.size());
@@ -21,6 +25,11 @@ int main()
 	aZero::LinearAllocator<>::Handle<int> intHandle = allocator.Allocate<int>();
 	intHandle.Write(1337);
 
+	// Allocate for a packed struct that is trivially copyable and call its function using the overloaded ->operator
+	auto customClassHandle = allocator.Allocate<MyClass>();
+	customClassHandle->Foo();
+
+	// The allocator alignes the allocation since the struct was 3 bytes
 	// Allocate a double and then write to it using the overloaded *operator
 	auto doubleHandle = allocator.Allocate<double>();
 	*doubleHandle = 42;
@@ -30,10 +39,6 @@ int main()
 	double& doubleRef = *doubleHandle;
 	doubleRef = 1337.0;
 	std::cout << "Double handle (2): " << *doubleHandle << "\n";
-
-	// Allocate for a custom trivially copyable class and call its function using the overloaded ->operator
-	auto customClassHandle = allocator.Allocate<MyClass>();
-	customClassHandle->Foo();
 
 	// Allocate and write to the allocator
 	auto appendAlloc = allocator.Append(666.f);
