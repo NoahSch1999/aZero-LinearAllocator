@@ -64,7 +64,7 @@ namespace aZero
 
         LinearAllocator& operator=(LinearAllocator&& other) noexcept
         {
-            if (*this != other)
+            if (this != &other)
             {
                 this->Move(other);
             }
