@@ -95,6 +95,21 @@ namespace aZero
             return Handle<T>(alignedPtr);
         }
 
+        [[nodiscard]] std::byte* Allocate(size_t numBytes)
+        {
+            size_t freeBytes = m_Capacity - static_cast<size_t>(m_OffsetPtr - m_MemoryPool);
+            void* voidOffsetPtr = static_cast<void*>(m_OffsetPtr);
+            std::byte* const alignedPtr = reinterpret_cast<std::byte*>(std::align(Alignment, numBytes, voidOffsetPtr, freeBytes));
+
+            if (!alignedPtr)
+            {
+                throw std::out_of_range("Memorypool is full");
+            }
+
+            m_OffsetPtr = alignedPtr + numBytes;
+            return alignedPtr;
+        }
+
         /**
          * @brief Allocates and copies the input data to the memory pool and returns a handle to the allocation.
          * @tparam T The type of the data to copy.
